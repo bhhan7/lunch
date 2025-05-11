@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>점심메뉴 룰렛</title>
+  <style>
+    body {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      min-height: 100vh;
+      padding: 20px;
+      background: #f8f8f8;
+      font-family: Arial, sans-serif;
+    }
+    canvas {
+      border-radius: 50%;
+      cursor: pointer;
+      width: 90vw;
+      max-width: 400px;
+      height: auto;
+    }
+    button {
+      margin: 10px;
+      padding: 10px 20px;
+      font-size: 16px;
+      background: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+    button:hover {
+      background: #45a049;
+    }
+    #input-area {
+      margin-top: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      width: 100%;
+      max-width: 400px;
+    }
+    input {
+      padding: 10px;
+      font-size: 16px;
+      width: 100%;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      box-sizing: border-box;
+    }
+    .popup {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%) scale(0);
+      background: white;
+      border-radius: 16px;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+      padding: 30px;
+      font-size: 20px;
+      font-weight: bold;
+      color: #444;
+      text-align: center;
+      z-index: 999;
+      transition: transform 0.3s ease;
+    }
+    .popup.show {
+      transform: translate(-50%, -50%) scale(1);
+    }
+    .popup-emoji {
+      font-size: 40px;
+      margin-bottom: 10px;
+      animation: pop 0.6s ease infinite alternate;
+    }
+    @keyframes pop {
+      0% { transform: scale(1); }
+      100% { transform: scale(1.2); }
+    }
+  </style>
+</head>
+<body>
+  <canvas id="roulette" width="400" height="400"></canvas>
+  <button onclick="spinRoulette()">돌리기</button>
+
+  <div id="input-area">
+    <input type="text" id="newMenu" placeholder="음식 이름 입력 (쉼표 또는 콜론으로 구분)">
+    <button onclick="addMenuItem()">추가</button>
+  </div>
+
+  <div id="popup" class="popup">
+    <div class="popup-emoji">🎉🎊🥳</div>
+    <div id="popup-text"></div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+  <script>
+    const canvas = document.getElementById("roulette");
+    const ctx = canvas.getContext("2d");
+    const popup = document.getElementById("popup");
+    const popupText = document.getElementById("popup-text");
+    let menuItems = JSON.parse(localStorage.getItem("lunchMenuItems")) || ["김밥", "짜장면", "비빔밥", "돈까스", "샐러드", "제육볶음", "햄버거", "냉면"];
+    let currentRotation = 0;
+    let rotationAngle = 0;
+
+    function saveMenuItems() {
+      localStorage.setItem("lunchMenuItems", JSON.stringify(menuItems));
+    }
+
+    function drawRoulette(rotation = 0) {
+      const totalItems = menuItems.length;
+      const anglePerItem = (Math.PI * 2) / totalItems;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      const radius = canvas.width / 2;
+
+      for (let i = 0; i < totalItems; i++) {
+        const startAngle = rotation + i * anglePerItem;
+        const endAngle = startAngle + anglePerItem;
+
+        ctx.beginPath();
+        ctx.moveTo(radius, radius);
+        ctx.arc(radius, radius, radius, startAngle, endAngle);
+        ctx.fillStyle = i % 2 === 0 ? "#ffcc80" : "#ffe0b2";
+        ctx.fill();
+
+        ctx.save();
+        ctx.translate(radius, radius);
+        ctx.rotate(startAngle + anglePerItem / 2);
+        ctx.rotate(Math.PI);
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillStyle = "#333";
+        ctx.font = `bold ${Math.max(12, canvas.width * 0.045)}px sans-serif`;
+        ctx.fillText(menuItems[i], -radius * 0.6, 0);
+        ctx.restore();
+      }
+
+      ctx.beginPath();
+      ctx.moveTo(radius - 10, 10);
+      ctx.lineTo(radius + 10, 10);
+      ctx.lineTo(radius, 40);
+      ctx.fillStyle = "#e53935";
+      ctx.fill();
+    }
+
+    drawRoulette();
+
+    function showPopup(result) {
+      popupText.textContent = `오늘의 점심은: ${result}!`;
+      popup.classList.add("show");
+      setTimeout(() => {
+        popup.classList.remove("show");
+      }, 3000);
+    }
+
+    function spinRoulette() {
+      const totalItems = menuItems.length;
+      const anglePerItem = 360 / totalItems;
+      const spinAmount = Math.floor(Math.random() * 360) + 720;
+      const rotationTarget = currentRotation + spinAmount;
+
+      gsap.to({}, {
+        duration: 4,
+        onUpdate: function () {
+          const progress = this.progress();
+          const easeOut = gsap.parseEase("power3.out")(progress);
+          const angle = rotationTarget * easeOut;
+          currentRotation = angle;
+          rotationAngle = (angle * Math.PI) / 180;
+          drawRoulette(rotationAngle);
+        },
+        onComplete: function () {
+          const normalized = (360 - (rotationTarget % 360) + 90) % 360;
+          const index = Math.floor((normalized + anglePerItem / 2) % 360 / anglePerItem);
+          const selectedItem = menuItems[index];
+          showPopup(selectedItem);
+        }
+      });
+    }
+
+    function addMenuItem() {
+      const input = document.getElementById("newMenu");
+      const inputText = input.value.trim();
+      if (inputText) {
+        const newItems = inputText.split(/[,:]/).map(item => item.trim()).filter(item => item);
+        newItems.forEach(item => {
+          if (!menuItems.includes(item)) {
+            menuItems.push(item);
+          }
+        });
+        input.value = "";
+        saveMenuItems();
+        drawRoulette(rotationAngle);
+      }
+    }
+
+    canvas.addEventListener("click", function (e) {
+      const rect = canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      const centerX = canvas.width / 2;
+      const centerY = canvas.height / 2;
+      const dx = x - centerX;
+      const dy = y - centerY;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      if (distance > centerX) return;
+
+      const angle = Math.atan2(dy, dx) - rotationAngle;
+      const adjustedAngle = (angle + 2 * Math.PI) % (2 * Math.PI);
+      const segment = Math.floor(adjustedAngle / ((2 * Math.PI) / menuItems.length));
+      if (menuItems[segment]) {
+        if (confirm(`'${menuItems[segment]}' 항목을 삭제하시겠습니까?`)) {
+          menuItems.splice(segment, 1);
+          saveMenuItems();
+          drawRoulette(rotationAngle);
+        }
+      }
+    });
+  </script>
+</body>
+</html>
+
